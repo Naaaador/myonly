@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>正在打开音乐…</title>
+<style>
+  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+       font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+       background:#0f1115;color:#e6e6e6;text-align:center}
+  .box{max-width:90vw}
+  .tip{font-size:16px;opacity:.85;margin-top:12px}
+  a{color:#4ea1ff;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="box">
+  <div style="font-size:20px">正在为你打开音乐应用…</div>
+  <div class="tip">若没有自动跳转，
+    <a id="manual" href="#">点此重试 / 选择应用</a>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   三个平台配置（按优先级从上到下尝试）
+   安卓用 intent:// + package= 精确判断 App 是否安装，没装自动试下一个
+   iOS 用裸 scheme（系统会弹“在App中打开”，无法完全无感，是苹果限制）
+   都打不开时落到该平台网页版
+   ============================================================ */
+var APPS = [
+  {
+    name: 'QQ音乐',
+    pkg: 'com.tencent.qqmusic',
+    scheme: 'qqmusic',
+    pathAndQuery: 'qq.com/media/playSonglist?p=%7B%22song%22%3A%5B%7B%22songmid%22%3A%22001lmD2a2YZYN3%22%7D%5D%7D',
+    iosRaw: 'qqmusic://qq.com/media/playSonglist?p=%7B%22song%22%3A%5B%7B%22songmid%22%3A%22001lmD2a2YZYN3%22%7D%5D%7D',
+    web: 'https://y.qq.com/n/ryqq/songDetail/001lmD2a2YZYN3'
+  },
+  {
+    name: '网易云音乐',
+    pkg: 'com.netease.cloudmusic',
+    scheme: 'orpheus',
+    pathAndQuery: 'song/25648006',
+    iosRaw: 'orpheus://song/25648006',
+    web: 'https://music.163.com/#/song?id=25648006'
+  },
+  {
+    name: '酷狗音乐',
+    pkg: 'com.kugou.android',
+    scheme: 'kugou',
+    pathAndQuery: 'start.weixin?%7B%22cmd%22%3A212%2C%22jsonStr%22%3A%7B%22hash%22%3A%22cdeb397163dff4511e75ec9728cd89a1%22%7D%7D',
+    iosRaw: 'kugou://start.weixin?%7B%22cmd%22%3A212%2C%22jsonStr%22%3A%7B%22hash%22%3A%22cdeb397163dff4511e75ec9728cd89a1%22%7D%7D',
+    web: 'https://www.kugou.com/mixsong/'
+  }
+];
+
+var isAndroid = /Android/i.test(navigator.userAgent);
+var isIOS     = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+function intentUrl(app){
+  return 'intent://' + app.pathAndQuery +
+         '#Intent;scheme=' + app.scheme +
+         ';package=' + app.pkg + ';end';
+}
+function iosUrl(app){ return app.iosRaw; }
+
+// 打开一个 URL；若 timeout 内页面被切走(成功唤起App)判定成功；否则执行 fail()
+function tryOpen(url, timeout, fail){
+  var start = Date.now(), done = false;
+  function onPageLeave(){ done = true; }
+  window.addEventListener('pagehide', onPageLeave);
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) onPageLeave(); });
+  location.href = url;
+  setTimeout(function(){
+    if (!done && (Date.now() - start) < timeout + 500){
+      window.removeEventListener('pagehide', onPageLeave);
+      fail();
+    }
+  }, timeout);
+}
+
+// 依次尝试：能唤起就停在被唤起的 App，否则试下一个，全失败落网页
+function trySequence(index){
+  if (index >= APPS.length){ finalFallback(); return; }
+  var app = APPS[index];
+  var url = isAndroid ? intentUrl(app) : (isIOS ? iosUrl(app) : app.web);
+  tryOpen(url, 1500, function(){ trySequence(index + 1); });
+}
+
+// 手动重试：点一次试下一个 App
+var manualIndex = 0;
+document.getElementById('manual').addEventListener('click', function(e){
+  e.preventDefault();
+  var app = APPS[manualIndex % APPS.length];
+  manualIndex++;
+  location.href = isAndroid ? intentUrl(app) : (isIOS ? iosUrl(app) : app.web);
+});
+
+function finalFallback(){ location.href = APPS[0].web; }
+
+trySequence(0);
+</script>
+</body>
+</html>
